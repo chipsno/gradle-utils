@@ -1,0 +1,98 @@
+import java.text.SimpleDateFormat
+
+def getGitPath() {
+    return ""
+}
+
+// 当前项目的git存放对应的本地目录路径，如果设置为null,则为project.rootDir
+def project_git_dir() {
+    def developer_own_project_git_dir = null
+    if (developer_own_project_git_dir == null) {
+        File gitPropFolder = file('.git')
+        if (gitPropFolder.exists() && gitPropFolder.isDirectory()) {
+            println("当前模块所在文件夹就是git文件夹")
+            // 当前脚本所在的路径，说明当前路径就是git文件夹
+            return gitPropFolder.getParentFile()
+        } else {
+            println("当前模块所在文件夹非git文件夹，返回root文件夹")
+            // 当前脚本所在的路径，说明当前路径是模块文件夹，所以返回父目录
+            return project.rootDir
+        }
+    } else {
+        println("返回用户自定义的git文件夹路径")
+        // 自行设置git文件夹路径
+        return file(developer_own_project_git_dir)
+    }
+}
+
+gradle.allprojects {
+    ext {
+
+        getNow = {
+            def df = new SimpleDateFormat("yyyyMMdd_HHmmss")
+            df.setTimeZone(TimeZone.getTimeZone("GMT+8:00"))
+            return df.format(new Date())
+        }
+
+        calculateVersionCode = {
+            def gitCommitCount = null
+            // commit的次数作为自增长的versionCode
+            try {
+                gitCommitCount = Integer.parseInt((getGitPath() + 'git rev-list HEAD --count').execute([], project_git_dir()).text.trim())
+                println("gitCommitCount--------" + gitCommitCount)
+
+                return gitCommitCount
+            } catch (Exception e) {
+                println("gitCommitCount--------error::" + e.getMessage())
+
+                return null
+            } finally {
+                println("calculateVersionCode--------" + gitCommitCount)
+            }
+        }
+
+        getGitLastCommitId = { needShort ->
+            def gitLastCommitId = null
+            try {
+                if (needShort) {
+                    gitLastCommitId = (getGitPath() + 'git rev-parse --short HEAD').execute([], project_git_dir()).text.trim()
+                    println("gitLastCommitId----short----" + gitLastCommitId)
+                } else {
+                    gitLastCommitId = (getGitPath() + 'git rev-parse HEAD').execute([], project_git_dir()).text.trim()
+                    println("gitLastCommitId----long ----" + gitLastCommitId)
+                }
+
+                return gitLastCommitId
+            } catch (Exception e) {
+                println("gitLastCommitId--------error::" + e.getMessage())
+
+                return ""
+            } 
+        }
+
+        // Updates output file names of a given variant to format
+        // [appNameHead]_[productFlavor]_[appBuildType]_[versionName]_[versionCode]_[buildTime].apk/aar
+        setOutputFileName = { output, appNameHead, appBuildType, productFlavor, myVerName, myVerCode, fileType, buildTime ->
+            def gitLastCommitId = getGitLastCommitId(true);
+
+            def newName = ""
+
+            if (productFlavor) {
+                if (!fileType) {
+                    newName = appNameHead + "_" + appBuildType + "_v" + myVerName + "_" + myVerCode + "_" + gitLastCommitId + "_" + buildTime + ".apk"
+                } else if ("apk".equals(fileType)) {
+                    newName = appNameHead + "_" + appBuildType + "_v" + myVerName + "_" + myVerCode + "_" + gitLastCommitId + "_" + buildTime + ".apk"
+                } else if ("aar".equals(fileType)) {
+                    newName = appNameHead + "_" + appBuildType + "_v" + myVerName + "_" + myVerCode + "_" + gitLastCommitId + "_" + buildTime + ".aar"
+                } else {
+                    newName = appNameHead + "_" + appBuildType + "_v" + myVerName + "_" + buildTime + "." + fileType
+                }
+            } else {
+                newName = originalName
+            }
+
+            return newName
+
+        }
+    }
+}
